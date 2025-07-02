@@ -68,6 +68,7 @@ struct ContentView: View {
             try imageData.write(to: fileURL)
             print("Saved image to: \(fileURL.path)")
             confirmationMessage = "Receipt saved successfully ✅"
+            processImageInBackground(imageURL: fileURL)
         } catch {
             print("Error saving image: \(error)")
             confirmationMessage = "Failed to save receipt ❌"
@@ -79,6 +80,39 @@ struct ContentView: View {
         }
     }
 }
+
+func processImageInBackground(imageURL: URL) {
+    DispatchQueue.global(qos: .background).async {
+        // Step 1: Load image from file
+        guard let imageData = try? Data(contentsOf: imageURL) else {
+            print("Failed to read saved image")
+            return
+        }
+
+        // Step 2: Build your API request
+        var request = URLRequest(url: URL(string: "https://your-api.com/receipt-upload")!)
+        request.httpMethod = "POST"
+        request.setValue("image/jpeg", forHTTPHeaderField: "Content-Type")
+        request.httpBody = imageData
+
+        // Step 3: Call the API
+        let task = URLSession.shared.dataTask(with: request) { data, response, error in
+            if let error = error {
+                print("Upload failed: \(error.localizedDescription)")
+                return
+            }
+
+            if let httpResponse = response as? HTTPURLResponse {
+                print("Upload completed with status code: \(httpResponse.statusCode)")
+            }
+
+            // Optionally: delete the image file here if no longer needed
+        }
+
+        task.resume()
+    }
+}
+
 
 #Preview {
     ContentView()
