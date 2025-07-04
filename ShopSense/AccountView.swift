@@ -35,12 +35,11 @@ struct AccountView: View {
                 Section(header: Text("Receipt Sync")) {
                     Button("Sync Unsynced Receipts") {
                         viewModel.syncReceipts()
-                        
-                        if let status = viewModel.syncStatus {
-                            Text(status)
-                                .font(.caption)
-                                .foregroundColor(.gray)
-                        }
+                    }
+                    if let status = viewModel.syncStatus {
+                        Text(status)
+                            .font(.caption)
+                            .foregroundColor(.gray)
                     }
                     Button("Clear Saved Receipts") {
                         clearSavedReceipts()
@@ -69,21 +68,13 @@ struct AccountView: View {
                     Button("Show Saved Files") {
                         listSavedReceipts()
                     }
-                    Button("Force Upload") {
-                        syncReceipts()
-                    }
                 }
             }
             .navigationTitle("Settings")
         }
     }
 
-    func syncReceipts() {
-//        let receipts = getSavedReceiptImages()
-//        for receipt in receipts {
-//            uploadReceipt(at: receipt)
-//        }
-    }
+
 
     func clearSavedReceipts() {
 //        let receipts = getSavedReceiptImages()

@@ -24,6 +24,7 @@ class AccountViewModel: ObservableObject {
 
         DispatchQueue.main.async {
             self.syncStatus = "Receipts syncing in background..."
+            print("[UI] syncStatus updated to: \(self.syncStatus ?? "nil")")
         }
     }
 
@@ -50,32 +51,68 @@ class AccountViewModel: ObservableObject {
 
             guard let imageData = try? Data(contentsOf: fileURL) else {
                 print("[Upload] Failed to read file: \(fileURL.lastPathComponent)")
+                DispatchQueue.main.async {
+                    self.syncStatus = "❌ Failed to read receipt: \(fileURL.lastPathComponent)"
+                    self.clearStatusAfterDelay()
+                }
                 return
             }
 
-            var request = URLRequest(url: URL(string: "https://your-api.com/receipt-upload")!)
+            var request = URLRequest(url: URL(string: "http://192.168.68.72:8080/extractTextAndStore")!)
             request.httpMethod = "POST"
             request.setValue("image/jpeg", forHTTPHeaderField: "Content-Type")
             request.httpBody = imageData
 
             URLSession.shared.dataTask(with: request) { data, response, error in
                 if let error = error {
-                    print("[Upload] Failed: \(fileURL.lastPathComponent) — \(error.localizedDescription)")
+                    print("[Upload] Network error: \(error.localizedDescription)")
+                    DispatchQueue.main.async {
+                        self.syncStatus = "❌ Network error while uploading: \(fileURL.lastPathComponent)"
+                        self.clearStatusAfterDelay()
+                    }
                     return
                 }
 
-                if let httpResponse = response as? HTTPURLResponse {
-                    print("[Upload] Completed: \(fileURL.lastPathComponent) — Status: \(httpResponse.statusCode)")
+                guard let httpResponse = response as? HTTPURLResponse else {
+                    print("[Upload] No valid HTTP response")
+                    DispatchQueue.main.async {
+                        self.syncStatus = "❌ Invalid server response for: \(fileURL.lastPathComponent)"
+                        self.clearStatusAfterDelay()
+                    }
+                    return
                 }
 
-                // Optionally delete the file if successful
-                do {
-                    try FileManager.default.removeItem(at: fileURL)
-                    print("[Cleanup] Deleted local file: \(fileURL.lastPathComponent)")
-                } catch {
-                    print("[Cleanup] Failed to delete: \(fileURL.lastPathComponent) — \(error)")
+                if httpResponse.statusCode == 200 {
+                    print("[Upload] Success: \(fileURL.lastPathComponent) — Status: \(httpResponse.statusCode)")
+                    DispatchQueue.main.async {
+                        self.syncStatus = "✅ Uploaded: \(fileURL.lastPathComponent)"
+                        self.clearStatusAfterDelay()
+                    }
+
+                    // Optional cleanup
+    //                do {
+    //                    try FileManager.default.removeItem(at: fileURL)
+    //                    print("[Cleanup] Deleted local file: \(fileURL.lastPathComponent)")
+    //                } catch {
+    //                    print("[Cleanup] Failed to delete: \(fileURL.lastPathComponent) — \(error)")
+    //                }
+
+                } else {
+                    print("[Upload] Failed: \(fileURL.lastPathComponent) — HTTP \(httpResponse.statusCode)")
+                    DispatchQueue.main.async {
+                        self.syncStatus = "❌ Upload failed: \(fileURL.lastPathComponent) — HTTP \(httpResponse.statusCode)"
+                        self.clearStatusAfterDelay()
+                    }
                 }
             }.resume()
         }
     }
+
+
+    private func clearStatusAfterDelay() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+            self.syncStatus = nil
+        }
+    }
+
 }
