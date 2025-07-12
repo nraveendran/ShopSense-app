@@ -1,11 +1,23 @@
 import SwiftUI
 
+#if canImport(UIKit)
+extension View {
+    func hideKeyboard() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder),
+                                        to: nil, from: nil, for: nil)
+    }
+}
+#endif
+
+
 struct ContentView: View {
     @State private var isShowingScanner = false
     @State private var confirmationMessage: String? = nil
     @StateObject private var speechRecognizer = SpeechRecognizer()
     
-    
+    // Inside your ContentView
+    @State private var apiResponse: String = ""
+
     
     var body : some View {
         ZStack {
@@ -63,25 +75,53 @@ struct ContentView: View {
                         .foregroundColor(.secondary)
                         .padding(.horizontal)
 
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 8) {
-                            if speechRecognizer.transcript.isEmpty {
-                                Text("Say something to get started...")
-                                    .foregroundColor(.gray)
-                                    .italic()
-                            } else {
-                                Text(speechRecognizer.transcript)
-                                    .font(.body)
-                                    .foregroundColor(.primary)
-                            }
-                        }
-                        .padding()
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    // Editable transcript area
+                    TextEditor(text: $speechRecognizer.transcript)
+                        .frame(minHeight: 100, maxHeight: 200)
+                        .padding(10)
                         .background(Color(UIColor.systemGray6))
                         .cornerRadius(12)
+                        .padding(.horizontal)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                        )
+
+                    // Send button to call backend
+                    HStack {
+                        Spacer()
+                        Button(action: {
+                            hideKeyboard() // 👈 Dismiss the keyboard
+                            Task {
+                                await fetchChatResponse(for: speechRecognizer.transcript)
+                            }
+                        }) {
+                            HStack(spacing: 6) {
+                                Image(systemName: "paperplane.fill")
+                                Text("Send")
+                            }
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 8)
+                            .background(Color.blue)
+                            .cornerRadius(8)
+                        }
+                        .padding(.trailing)
                     }
-                    .padding(.horizontal)
-                    .frame(maxHeight: 200)
+
+                    // Display API Response
+                    
+                    if !apiResponse.isEmpty {
+                        Text(apiResponse)
+                            .padding()
+                            .background(Color(UIColor.systemGray5))
+                            .cornerRadius(10)
+                            .padding(.horizontal)
+                            .font(.body)
+                            .lineLimit(nil)
+                            .fixedSize(horizontal: false, vertical: true) // 👈 important
+                    }
+
                 }
 
                 
@@ -135,6 +175,32 @@ struct ContentView: View {
         }
         
     }
+    
+    func fetchChatResponse(for query: String) async {
+        let encodedQuery = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+        guard let url = URL(string: "http://192.168.68.72:8080/api/chat/\(encodedQuery)") else {
+            apiResponse = "❌ Invalid URL"
+            return
+        }
+
+        do {
+            let (data, _) = try await URLSession.shared.data(from: url)
+            if let responseText = String(data: data, encoding: .utf8) {
+                DispatchQueue.main.async {
+                    apiResponse = responseText
+                }
+            } else {
+                DispatchQueue.main.async {
+                    apiResponse = "❌ Unable to parse response"
+                }
+            }
+        } catch {
+            DispatchQueue.main.async {
+                apiResponse = "❌ Network error: \(error.localizedDescription)"
+            }
+        }
+    }
+
     func saveImageLocally(_ image: UIImage) {
         guard let imageData = image.jpegData(compressionQuality: 0.8) else {
             confirmationMessage = "❌ Failed to convert image"
